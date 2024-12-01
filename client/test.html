@@ -30,22 +30,66 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            margin-right: 10px;
         }
         button:hover {
             background-color: #45a049;
         }
-        #result {
+        #result, #gpuInfo, #gpuTestResult {
             margin-top: 20px;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
             white-space: pre-wrap;
         }
+        .status-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .gpu-status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+        .gpu-active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .gpu-inactive {
+            background-color: #f44336;
+            color: white;
+        }
     </style>
 </head>
 <body>
     <h1>OCR API Test</h1>
     
+    <div class="status-section">
+        <h3>System Status
+            <button onclick="checkGPUStatus()" style="float: right; font-size: 0.8em;">Refresh Status</button>
+        </h3>
+        <div id="gpuInfo">Checking GPU status...</div>
+    </div>
+
+    <div class="status-section">
+        <h3>GPU Test</h3>
+        <div class="form-group">
+            <label for="testModel">Model:</label>
+            <select id="testModel" required></select>
+        </div>
+        <div class="form-group">
+            <label for="testPrompt">Test Prompt:</label>
+            <input type="text" id="testPrompt" value="This is a test prompt to verify GPU usage.">
+        </div>
+        <button onclick="testGPU()">Run GPU Test</button>
+        <div id="gpuTestResult"></div>
+    </div>
+
+    <h2>OCR Test</h2>
     <form id="ocrForm">
         <div class="form-group">
             <label for="file">Select PDF File:</label>
@@ -76,12 +120,7 @@
 
         <div class="form-group">
             <label for="model">Model:</label>
-            <select id="model" required>
-                <option value="llama2">llama2</option>
-                <option value="llama2-uncensored">llama2-uncensored</option>
-                <option value="mistral">mistral</option>
-                <option value="mixtral">mixtral</option>
-            </select>
+            <select id="model" required></select>
         </div>
 
         <div class="form-group">
@@ -94,7 +133,7 @@
             <input type="text" id="storage_filename">
         </div>
 
-        <button type="submit">Submit</button>
+        <button type="submit">Submit OCR</button>
     </form>
 
     <div id="result"></div>
@@ -110,20 +149,99 @@
                 }
                 const data = await response.json();
                 const modelSelect = document.getElementById('model');
+                const testModelSelect = document.getElementById('testModel');
                 modelSelect.innerHTML = ''; // Clear existing options
+                testModelSelect.innerHTML = ''; // Clear existing options
                 
                 data.models.forEach(model => {
                     const option = document.createElement('option');
+                    const testOption = document.createElement('option');
                     option.value = model;
                     option.textContent = model;
+                    testOption.value = model;
+                    testOption.textContent = model;
                     modelSelect.appendChild(option);
+                    testModelSelect.appendChild(testOption);
                 });
             } catch (error) {
                 console.error('Error loading models:', error);
             }
         }
 
-        document.addEventListener('DOMContentLoaded', loadModels);
+        async function checkGPUStatus() {
+            try {
+                const response = await fetch(`${API_URL}/llm/system_info`);
+                const data = await response.json();
+                
+                const gpuInfo = document.getElementById('gpuInfo');
+                let html = '<h4>GPU Status:</h4>';
+                
+                // GPU Availability
+                html += `<p>GPU Available: <span class="gpu-status ${data.gpu_available ? 'gpu-active' : 'gpu-inactive'}">${data.gpu_available ? 'Yes' : 'No'}</span></p>`;
+                
+                // Ollama GPU Usage
+                if (data.ollama_gpu_usage) {
+                    html += `<p>Ollama Using GPU: <span class="gpu-status ${data.ollama_gpu_usage.using_gpu ? 'gpu-active' : 'gpu-inactive'}">${data.ollama_gpu_usage.using_gpu ? 'Yes' : 'No'}</span></p>`;
+                    
+                    if (data.ollama_gpu_usage.gpu_processes.length > 0) {
+                        html += '<h4>Ollama GPU Processes:</h4>';
+                        html += '<pre>' + data.ollama_gpu_usage.gpu_processes.join('\n') + '</pre>';
+                    }
+                }
+                
+                // GPU Information
+                if (data.gpu_info) {
+                    html += '<h4>GPU Details:</h4>';
+                    html += '<pre>' + data.gpu_info.join('\n') + '</pre>';
+                }
+                
+                gpuInfo.innerHTML = html;
+            } catch (error) {
+                console.error('Error checking GPU status:', error);
+                document.getElementById('gpuInfo').innerHTML = 'Error checking GPU status: ' + error.message;
+            }
+        }
+
+        async function testGPU() {
+            const testResult = document.getElementById('gpuTestResult');
+            testResult.innerHTML = 'Running GPU test...';
+            
+            try {
+                const response = await fetch(`${API_URL}/llm/test_gpu`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: document.getElementById('testModel').value,
+                        prompt: document.getElementById('testPrompt').value
+                    })
+                });
+                
+                const data = await response.json();
+                let html = '<h4>Test Results:</h4>';
+                html += `<p>Generation Time: ${data.generation_time.toFixed(2)} seconds</p>`;
+                html += `<p>GPU Usage: <span class="gpu-status ${data.gpu_usage.using_gpu ? 'gpu-active' : 'gpu-inactive'}">${data.gpu_usage.using_gpu ? 'Yes' : 'No'}</span></p>`;
+                
+                if (data.gpu_usage.post_generation.length > 0) {
+                    html += '<h4>GPU Processes After Generation:</h4>';
+                    html += '<pre>' + data.gpu_usage.post_generation.join('\n') + '</pre>';
+                }
+                
+                html += '<h4>Generated Text:</h4>';
+                html += '<pre>' + data.generated_text + '</pre>';
+                
+                testResult.innerHTML = html;
+            } catch (error) {
+                console.error('Error testing GPU:', error);
+                testResult.innerHTML = 'Error testing GPU: ' + error.message;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadModels();
+            checkGPUStatus();
+        });
 
         document.getElementById('ocrForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -143,7 +261,7 @@
             formData.append('file', file);
             formData.append('strategy', document.getElementById('strategy').value);
             formData.append('ocr_cache', document.getElementById('ocr_cache').value);
-            formData.append('model', model); // This is now required
+            formData.append('model', model);
 
             // Add optional fields only if they have values
             const prompt = document.getElementById('prompt').value;
@@ -156,7 +274,7 @@
 
             try {
                 // Upload file
-                const uploadResponse = await fetch(`${API_URL}/ocr`, {  // Changed to /ocr instead of /ocr/upload
+                const uploadResponse = await fetch(`${API_URL}/ocr`, {
                     method: 'POST',
                     body: formData
                 });
