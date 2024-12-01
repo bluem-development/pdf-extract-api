@@ -274,12 +274,12 @@ async def list_models():
         response = ollama.list()
         # Print response for debugging
         print("Ollama response:", response)
-        # Extract model names - handle both possible response structures
-        if isinstance(response, dict):
-            models = [model.get('name', model.get('model', '')) for model in response.get('models', [])]
+        # Extract model names from the Model objects
+        if hasattr(response, 'models'):
+            models = [model.model.split(':')[0] for model in response.models]
         else:
             # If response is the list directly
-            models = [model.get('name', model.get('model', '')) for model in response]
+            models = [model.model.split(':')[0] for model in response]
         return {"models": models}
     except ollama.ResponseError as e:
         print('Error:', e.error)
