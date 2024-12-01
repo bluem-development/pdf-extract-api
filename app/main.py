@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 import ollama
 import base64
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 
 def storage_profile_exists(profile_name: str) -> bool:
@@ -21,6 +22,15 @@ def storage_profile_exists(profile_name: str) -> bool:
 
 app = FastAPI()
 
+# Add CORS middleware configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Connect to Redis
 redis_url = os.getenv('REDIS_CACHE_URL', 'redis://redis:6379/1')
 redis_client = redis.StrictRedis.from_url(redis_url)
@@ -28,24 +38,22 @@ redis_client = redis.StrictRedis.from_url(redis_url)
 @app.post("/ocr")
 async def ocr_endpoint(
     strategy: str = Form(...),
-    prompt: str = Form(None),
     model: str = Form(...),
     file: UploadFile = File(...),
     ocr_cache: bool = Form(...),
+    prompt: str = Form(None),
     storage_profile: str = Form('default'),
     storage_filename: str = Form(None)
 ):
     """
     Endpoint to extract text from an uploaded PDF file using different OCR strategies.
-    Supports both synchronous and asynchronous processing.
     """
-    # Validate input
-    try:
-        OcrFormRequest(strategy=strategy, prompt=prompt, model=model, ocr_cache=ocr_cache, storage_profile=storage_profile, storage_filename=storage_filename)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    # Convert string to boolean if needed
+    if isinstance(ocr_cache, str):
+        ocr_cache = ocr_cache.lower() == 'true'
 
-    if file.content_type is not None and file.content_type != 'application/pdf':
+    # Validate file type
+    if file.content_type not in ['application/pdf', 'application/octet-stream']:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDFs are supported.")
 
     pdf_bytes = await file.read()
