@@ -302,13 +302,26 @@ async def get_system_info():
         }
         
         if gpu_info["cuda_available"]:
+            # Create a large tensor to test memory allocation
+            test_tensor = torch.zeros((1024, 1024, 32), device='cuda')  # Allocate ~128MB
+            # Force some computations
+            test_tensor = torch.rand_like(test_tensor)
+            torch.cuda.synchronize()  # Make sure the operation is complete
+            
             gpu_info.update({
                 "current_device": torch.cuda.current_device(),
                 "device_name": torch.cuda.get_device_name(0),
                 "memory_allocated": f"{torch.cuda.memory_allocated(0)/1024**3:.2f} GB",
                 "memory_reserved": f"{torch.cuda.memory_reserved(0)/1024**3:.2f} GB",
                 "max_memory_allocated": f"{torch.cuda.max_memory_allocated(0)/1024**3:.2f} GB",
+                "total_memory": f"{torch.cuda.get_device_properties(0).total_memory/1024**3:.2f} GB",
+                "memory_allocated_bytes": torch.cuda.memory_allocated(0),
+                "memory_reserved_bytes": torch.cuda.memory_reserved(0),
             })
+            
+            # Clean up test tensor
+            del test_tensor
+            torch.cuda.empty_cache()
 
         # Get model details
         models_info = []

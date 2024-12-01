@@ -185,9 +185,12 @@
                 if (cudaAvailable) {
                     html += '<h4>GPU Details:</h4>';
                     html += `<p>Device Name: ${data.gpu_info.device_name}</p>`;
+                    html += `<p>Total GPU Memory: ${data.gpu_info.total_memory}</p>`;
                     html += `<p>Memory Allocated: ${data.gpu_info.memory_allocated}</p>`;
                     html += `<p>Memory Reserved: ${data.gpu_info.memory_reserved}</p>`;
                     html += `<p>Max Memory Allocated: ${data.gpu_info.max_memory_allocated}</p>`;
+                    html += `<p>Memory Allocated (bytes): ${data.gpu_info.memory_allocated_bytes.toLocaleString()}</p>`;
+                    html += `<p>Memory Reserved (bytes): ${data.gpu_info.memory_reserved_bytes.toLocaleString()}</p>`;
                 }
                 
                 gpuInfo.innerHTML = html;
