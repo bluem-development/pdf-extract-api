@@ -6,9 +6,15 @@ ARG MAX_JOBS=4
 
 FROM nvidia/cuda:$CUDA_VERSION-cudnn$CUDNN_VERSION-devel-ubuntu$UBUNTU_VERSION
 
+# Add NVIDIA repository
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    nvidia-utils-${CUDA_VERSION%%.*} \
+    software-properties-common \
+    && add-apt-repository ppa:graphics-drivers/ppa \
+    && apt-get update
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    nvidia-utils \
     wget \
     curl \
     unzip \
