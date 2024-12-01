@@ -272,7 +272,14 @@ async def list_models():
     """
     try:
         response = ollama.list()
-        models = [model['name'] for model in response.get('models', [])]
+        # Print response for debugging
+        print("Ollama response:", response)
+        # Extract model names - handle both possible response structures
+        if isinstance(response, dict):
+            models = [model.get('name', model.get('model', '')) for model in response.get('models', [])]
+        else:
+            # If response is the list directly
+            models = [model.get('name', model.get('model', '')) for model in response]
         return {"models": models}
     except ollama.ResponseError as e:
         print('Error:', e.error)
