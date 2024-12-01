@@ -71,10 +71,10 @@ async def ocr_endpoint(
 @app.post("/ocr/upload")
 async def ocr_upload_endpoint(
     strategy: str = Form(...),
-    prompt: str = Form(None),
     model: str = Form(...),
     file: UploadFile = File(...),
     ocr_cache: bool = Form(...),
+    prompt: str = Form(None),
     storage_profile: str = Form('default'),
     storage_filename: str = Form(None)
 ):
@@ -82,7 +82,15 @@ async def ocr_upload_endpoint(
     Alias endpoint to extract text from an uploaded PDF file using different OCR strategies.
     Supports both synchronous and asynchronous processing.
     """
-    return await ocr_endpoint(strategy, prompt, model, file, ocr_cache, storage_profile, storage_filename)
+    return await ocr_endpoint(
+        strategy=strategy,
+        model=model,
+        file=file,
+        ocr_cache=ocr_cache,
+        prompt=prompt,
+        storage_profile=storage_profile,
+        storage_filename=storage_filename
+    )
 
 class OllamaGenerateRequest(BaseModel):
     model: str

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        select, input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>OCR API Test</h1>
+    
+    <form id="ocrForm">
+        <div class="form-group">
+            <label for="file">Select PDF File:</label>
+            <input type="file" id="file" accept=".pdf" required>
+        </div>
+
+        <div class="form-group">
+            <label for="strategy">Strategy:</label>
+            <select id="strategy" required>
+                <option value="marker">marker</option>
+                <option value="llama_vision">llama_vision</option>
+                <option value="tesseract">tesseract</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="ocr_cache">OCR Cache:</label>
+            <select id="ocr_cache">
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="prompt">Prompt (optional):</label>
+            <input type="text" id="prompt">
+        </div>
+
+        <div class="form-group">
+            <label for="model">Model:</label>
+            <select id="model" required>
+                <option value="llama2">llama2</option>
+                <option value="llama2-uncensored">llama2-uncensored</option>
+                <option value="mistral">mistral</option>
+                <option value="mixtral">mixtral</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="storage_profile">Storage Profile (optional):</label>
+            <input type="text" id="storage_profile" placeholder="default">
+        </div>
+
+        <div class="form-group">
+            <label for="storage_filename">Storage Filename (optional):</label>
+            <input type="text" id="storage_filename">
+        </div>
+
+        <button type="submit">Submit</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        const API_URL = 'http://148.251.184.227:8000';
+        
+        document.getElementById('ocrForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = 'Processing...';
+
+            const formData = new FormData();
+            const file = document.getElementById('file').files[0];
+            const model = document.getElementById('model').value;
+            
+            if (!file) {
+                resultDiv.textContent = 'Error: Please select a file';
+                return;
+            }
+
+            // Add required fields
+            formData.append('file', file);
+            formData.append('strategy', document.getElementById('strategy').value);
+            formData.append('ocr_cache', document.getElementById('ocr_cache').value);
+            formData.append('model', model); // This is now required
+
+            // Add optional fields only if they have values
+            const prompt = document.getElementById('prompt').value;
+            const storage_profile = document.getElementById('storage_profile').value;
+            const storage_filename = document.getElementById('storage_filename').value;
+
+            if (prompt) formData.append('prompt', prompt);
+            if (storage_profile) formData.append('storage_profile', storage_profile);
+            if (storage_filename) formData.append('storage_filename', storage_filename);
+
+            try {
+                // Upload file
+                const uploadResponse = await fetch(`${API_URL}/ocr`, {  // Changed to /ocr instead of /ocr/upload
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadResponse.ok) {
+                    const errorData = await uploadResponse.json();
+                    throw new Error(`Upload failed: ${JSON.stringify(errorData)}`);
+                }
+
+                const uploadData = await uploadResponse.json();
+                resultDiv.textContent = 'Upload successful. Task ID: ' + uploadData.task_id + '\nChecking result...';
+
+                // Poll for results
+                const pollResult = async (taskId) => {
+                    const resultResponse = await fetch(`${API_URL}/ocr/result/${taskId}`);
+                    if (!resultResponse.ok) {
+                        throw new Error(`Result check failed: ${resultResponse.statusText}`);
+                    }
+                    const resultData = await resultResponse.json();
+                    
+                    resultDiv.textContent = 'Current status:\n' + JSON.stringify(resultData, null, 2);
+                    
+                    if (resultData.state !== 'SUCCESS' && resultData.state !== 'FAILURE') {
+                        // Still processing, poll again after 1 second
+                        setTimeout(() => pollResult(taskId), 1000);
+                    }
+                };
+
+                // Start polling
+                pollResult(uploadData.task_id);
+
+            } catch (error) {
+                resultDiv.textContent = 'Error: ' + error.message;
+                console.error('Error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
