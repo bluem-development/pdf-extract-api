@@ -79,17 +79,22 @@ services:
 
 
   ollama:
-    image: ollama/ollama # Use the official Ollama image
+    image: ollama/ollama
     container_name: ollama
     pull_policy: always
     tty: true
     restart: always
     ports:
-      - "11434:11434"  # Expose Ollama's API port, changing internal to external port
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/"]  # Assumes health endpoint exists
+      test: ["CMD", "curl", "-f", "http://localhost:11434/"]
       interval: 30s
       timeout: 10s
       retries: 3
-    runtime: nvidia
+
+# Add at the bottom of your docker-compose.yml
+volumes:
+  ollama_models:
 
