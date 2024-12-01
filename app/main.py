@@ -358,9 +358,6 @@ async def test_gpu_usage(request: OllamaGenerateRequest):
     """
     Test endpoint to verify GPU usage with a simple generation task and PyTorch GPU check.
     """
-    if not request.prompt:
-        request.prompt = "This is a test prompt to verify GPU usage."
-    
     try:
         # Check GPU status with PyTorch
         gpu_status = {
@@ -374,17 +371,34 @@ async def test_gpu_usage(request: OllamaGenerateRequest):
             gpu_status["test_operation"] = "successful"
             gpu_status["current_device"] = torch.cuda.current_device()
             gpu_status["device_name"] = torch.cuda.get_device_name(0)
+            gpu_status["memory_allocated"] = f"{torch.cuda.memory_allocated(0)/1024**3:.2f} GB"
+            gpu_status["memory_reserved"] = f"{torch.cuda.memory_reserved(0)/1024**3:.2f} GB"
         
-        # Generate text
-        start_time = time.time()
-        response = ollama.generate(request.model, request.prompt)
-        end_time = time.time()
+        # Use default prompt if none provided
+        prompt = request.prompt or "This is a test prompt to verify GPU usage."
+        
+        # Generate text and measure time
+        generation_result = {
+            "start_time": time.time(),
+            "generated_text": "",
+            "generation_time": 0
+        }
+        
+        response = ollama.generate(request.model, prompt)
+        generation_result["generated_text"] = response.get("response", "")
+        generation_result["generation_time"] = time.time() - generation_result["start_time"]
         
         return {
-            "generation_time": end_time - start_time,
-            "generated_text": response.get("response", ""),
+            "status": "success",
+            "generation_time": generation_result["generation_time"],
+            "generated_text": generation_result["generated_text"],
             "gpu_status": gpu_status
         }
     except Exception as e:
-        print('Error:', str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to test GPU usage: {str(e)}")
+        error_message = str(e)
+        print('Error:', error_message)
+        return {
+            "status": "error",
+            "error": error_message,
+            "gpu_status": gpu_status if 'gpu_status' in locals() else {"error": "Could not get GPU status"}
+        }
