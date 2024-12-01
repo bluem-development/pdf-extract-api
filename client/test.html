@@ -176,23 +176,18 @@
                 const gpuInfo = document.getElementById('gpuInfo');
                 let html = '<h4>GPU Status:</h4>';
                 
-                // GPU Availability
-                html += `<p>GPU Available: <span class="gpu-status ${data.gpu_available ? 'gpu-active' : 'gpu-inactive'}">${data.gpu_available ? 'Yes' : 'No'}</span></p>`;
-                
-                // Ollama GPU Usage
-                if (data.ollama_gpu_usage) {
-                    html += `<p>Ollama Using GPU: <span class="gpu-status ${data.ollama_gpu_usage.using_gpu ? 'gpu-active' : 'gpu-inactive'}">${data.ollama_gpu_usage.using_gpu ? 'Yes' : 'No'}</span></p>`;
-                    
-                    if (data.ollama_gpu_usage.gpu_processes.length > 0) {
-                        html += '<h4>Ollama GPU Processes:</h4>';
-                        html += '<pre>' + data.ollama_gpu_usage.gpu_processes.join('\n') + '</pre>';
-                    }
-                }
+                // GPU Availability using PyTorch info
+                const cudaAvailable = data.gpu_info.cuda_available;
+                html += `<p>CUDA Available: <span class="gpu-status ${cudaAvailable ? 'gpu-active' : 'gpu-inactive'}">${cudaAvailable ? 'Yes' : 'No'}</span></p>`;
+                html += `<p>GPU Device Count: ${data.gpu_info.device_count}</p>`;
                 
                 // GPU Information
-                if (data.gpu_info) {
+                if (cudaAvailable) {
                     html += '<h4>GPU Details:</h4>';
-                    html += '<pre>' + data.gpu_info.join('\n') + '</pre>';
+                    html += `<p>Device Name: ${data.gpu_info.device_name}</p>`;
+                    html += `<p>Memory Allocated: ${data.gpu_info.memory_allocated}</p>`;
+                    html += `<p>Memory Reserved: ${data.gpu_info.memory_reserved}</p>`;
+                    html += `<p>Max Memory Allocated: ${data.gpu_info.max_memory_allocated}</p>`;
                 }
                 
                 gpuInfo.innerHTML = html;
@@ -221,11 +216,12 @@
                 const data = await response.json();
                 let html = '<h4>Test Results:</h4>';
                 html += `<p>Generation Time: ${data.generation_time.toFixed(2)} seconds</p>`;
-                html += `<p>GPU Usage: <span class="gpu-status ${data.gpu_usage.using_gpu ? 'gpu-active' : 'gpu-inactive'}">${data.gpu_usage.using_gpu ? 'Yes' : 'No'}</span></p>`;
+                html += `<p>CUDA Available: <span class="gpu-status ${data.gpu_status.cuda_available ? 'gpu-active' : 'gpu-inactive'}">${data.gpu_status.cuda_available ? 'Yes' : 'No'}</span></p>`;
                 
-                if (data.gpu_usage.post_generation.length > 0) {
-                    html += '<h4>GPU Processes After Generation:</h4>';
-                    html += '<pre>' + data.gpu_usage.post_generation.join('\n') + '</pre>';
+                if (data.gpu_status.cuda_available) {
+                    html += `<p>Device Count: ${data.gpu_status.device_count}</p>`;
+                    html += `<p>Device Name: ${data.gpu_status.device_name}</p>`;
+                    html += `<p>Test Operation: ${data.gpu_status.test_operation}</p>`;
                 }
                 
                 html += '<h4>Generated Text:</h4>';
