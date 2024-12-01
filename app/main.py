@@ -264,3 +264,16 @@ async def generate_llama(request: OllamaGenerateRequest):
 
     generated_text = response.get("response", "")
     return {"generated_text": generated_text}
+
+@app.get("/llm/models")
+async def list_models():
+    """
+    Endpoint to list all available Ollama models.
+    """
+    try:
+        response = ollama.list()
+        models = [model['name'] for model in response.get('models', [])]
+        return {"models": models}
+    except ollama.ResponseError as e:
+        print('Error:', e.error)
+        raise HTTPException(status_code=500, detail="Failed to get models from Ollama API")

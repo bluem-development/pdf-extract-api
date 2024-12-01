@@ -102,6 +102,29 @@
     <script>
         const API_URL = 'http://148.251.184.227:8000';
         
+        async function loadModels() {
+            try {
+                const response = await fetch(`${API_URL}/llm/models`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch models');
+                }
+                const data = await response.json();
+                const modelSelect = document.getElementById('model');
+                modelSelect.innerHTML = ''; // Clear existing options
+                
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading models:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadModels);
+
         document.getElementById('ocrForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const resultDiv = document.getElementById('result');
@@ -156,10 +179,18 @@
                     
                     resultDiv.textContent = 'Current status:\n' + JSON.stringify(resultData, null, 2);
                     
-                    if (resultData.state !== 'SUCCESS' && resultData.state !== 'FAILURE') {
-                        // Still processing, poll again after 1 second
-                        setTimeout(() => pollResult(taskId), 1000);
+                    // Stop polling if task is completed or failed
+                    if (resultData.state === 'SUCCESS') {
+                        resultDiv.textContent = 'Task completed successfully!\n\nResult:\n' + 
+                            JSON.stringify(resultData.result, null, 2);
+                        return;
+                    } else if (resultData.state === 'FAILURE') {
+                        resultDiv.textContent = 'Task failed:\n' + JSON.stringify(resultData, null, 2);
+                        return;
                     }
+                    
+                    // Continue polling only if task is still in progress
+                    setTimeout(() => pollResult(taskId), 1000);
                 };
 
                 // Start polling
