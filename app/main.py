@@ -14,6 +14,7 @@ import ollama
 import base64
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
+import torch
 
 
 def storage_profile_exists(profile_name: str) -> bool:
@@ -294,23 +295,20 @@ async def get_system_info():
         # Get list of models with their details
         models_response = ollama.list()
         
-        # Try to get GPU information using nvidia-smi if available
-        try:
-            # Get GPU device info
-            gpu_info = os.popen('nvidia-smi --query-gpu=gpu_name,memory.total,memory.used,memory.free,temperature.gpu --format=csv,noheader,nounits').read().strip()
-            has_gpu = bool(gpu_info)
-            
-            # Get processes using GPU
-            gpu_processes = os.popen('nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits').read().strip()
-            ollama_gpu_processes = [p for p in gpu_processes.split('\n') if 'ollama' in p.lower()] if gpu_processes else []
-            
-            # Check if Ollama is using GPU
-            ollama_using_gpu = len(ollama_gpu_processes) > 0
-        except:
-            gpu_info = None
-            has_gpu = False
-            ollama_gpu_processes = []
-            ollama_using_gpu = False
+        # Get GPU information using PyTorch
+        gpu_info = {
+            "cuda_available": torch.cuda.is_available(),
+            "device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        }
+        
+        if gpu_info["cuda_available"]:
+            gpu_info.update({
+                "current_device": torch.cuda.current_device(),
+                "device_name": torch.cuda.get_device_name(0),
+                "memory_allocated": f"{torch.cuda.memory_allocated(0)/1024**3:.2f} GB",
+                "memory_reserved": f"{torch.cuda.memory_reserved(0)/1024**3:.2f} GB",
+                "max_memory_allocated": f"{torch.cuda.max_memory_allocated(0)/1024**3:.2f} GB",
+            })
 
         # Get model details
         models_info = []
@@ -335,12 +333,7 @@ async def get_system_info():
             models_info.append(model_info)
 
         return {
-            "gpu_available": has_gpu,
-            "gpu_info": gpu_info.split('\n') if gpu_info else None,
-            "ollama_gpu_usage": {
-                "using_gpu": ollama_using_gpu,
-                "gpu_processes": ollama_gpu_processes
-            },
+            "gpu_info": gpu_info,
             "models": models_info
         }
     except ollama.ResponseError as e:
@@ -350,35 +343,34 @@ async def get_system_info():
 @app.post("/llm/test_gpu")
 async def test_gpu_usage(request: OllamaGenerateRequest):
     """
-    Test endpoint to verify GPU usage with a simple generation task.
+    Test endpoint to verify GPU usage with a simple generation task and PyTorch GPU check.
     """
     if not request.prompt:
         request.prompt = "This is a test prompt to verify GPU usage."
     
     try:
-        # Get GPU state before generation
-        pre_gpu_state = os.popen('nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits').read().strip()
+        # Check GPU status with PyTorch
+        gpu_status = {
+            "cuda_available": torch.cuda.is_available(),
+            "device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0
+        }
+        
+        if gpu_status["cuda_available"]:
+            # Run a small tensor operation to verify GPU
+            test_tensor = torch.cuda.FloatTensor(2, 2).fill_(1.0)
+            gpu_status["test_operation"] = "successful"
+            gpu_status["current_device"] = torch.cuda.current_device()
+            gpu_status["device_name"] = torch.cuda.get_device_name(0)
         
         # Generate text
         start_time = time.time()
         response = ollama.generate(request.model, request.prompt)
         end_time = time.time()
         
-        # Get GPU state after generation
-        post_gpu_state = os.popen('nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits').read().strip()
-        
-        # Check if Ollama process appears in GPU processes
-        ollama_pre_gpu = [p for p in pre_gpu_state.split('\n') if 'ollama' in p.lower()] if pre_gpu_state else []
-        ollama_post_gpu = [p for p in post_gpu_state.split('\n') if 'ollama' in p.lower()] if post_gpu_state else []
-        
         return {
             "generation_time": end_time - start_time,
             "generated_text": response.get("response", ""),
-            "gpu_usage": {
-                "pre_generation": ollama_pre_gpu,
-                "post_generation": ollama_post_gpu,
-                "using_gpu": len(ollama_post_gpu) > 0
-            }
+            "gpu_status": gpu_status
         }
     except Exception as e:
         print('Error:', str(e))
