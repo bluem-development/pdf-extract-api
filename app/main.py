@@ -284,3 +284,102 @@ async def list_models():
     except ollama.ResponseError as e:
         print('Error:', e.error)
         raise HTTPException(status_code=500, detail="Failed to get models from Ollama API")
+
+@app.get("/llm/system_info")
+async def get_system_info():
+    """
+    Endpoint to get system information including GPU status and model details.
+    """
+    try:
+        # Get list of models with their details
+        models_response = ollama.list()
+        
+        # Try to get GPU information using nvidia-smi if available
+        try:
+            # Get GPU device info
+            gpu_info = os.popen('nvidia-smi --query-gpu=gpu_name,memory.total,memory.used,memory.free,temperature.gpu --format=csv,noheader,nounits').read().strip()
+            has_gpu = bool(gpu_info)
+            
+            # Get processes using GPU
+            gpu_processes = os.popen('nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits').read().strip()
+            ollama_gpu_processes = [p for p in gpu_processes.split('\n') if 'ollama' in p.lower()] if gpu_processes else []
+            
+            # Check if Ollama is using GPU
+            ollama_using_gpu = len(ollama_gpu_processes) > 0
+        except:
+            gpu_info = None
+            has_gpu = False
+            ollama_gpu_processes = []
+            ollama_using_gpu = False
+
+        # Get model details
+        models_info = []
+        if hasattr(models_response, 'models'):
+            models = models_response.models
+        else:
+            models = models_response
+
+        for model in models:
+            model_info = {
+                'name': model.model,
+                'size': model.size,
+                'modified_at': model.modified_at,
+                'details': {
+                    'format': model.details.format,
+                    'family': model.details.family,
+                    'families': model.details.families,
+                    'parameter_size': model.details.parameter_size,
+                    'quantization_level': model.details.quantization_level
+                }
+            }
+            models_info.append(model_info)
+
+        return {
+            "gpu_available": has_gpu,
+            "gpu_info": gpu_info.split('\n') if gpu_info else None,
+            "ollama_gpu_usage": {
+                "using_gpu": ollama_using_gpu,
+                "gpu_processes": ollama_gpu_processes
+            },
+            "models": models_info
+        }
+    except ollama.ResponseError as e:
+        print('Error:', e.error)
+        raise HTTPException(status_code=500, detail="Failed to get system information")
+
+@app.post("/llm/test_gpu")
+async def test_gpu_usage(request: OllamaGenerateRequest):
+    """
+    Test endpoint to verify GPU usage with a simple generation task.
+    """
+    if not request.prompt:
+        request.prompt = "This is a test prompt to verify GPU usage."
+    
+    try:
+        # Get GPU state before generation
+        pre_gpu_state = os.popen('nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits').read().strip()
+        
+        # Generate text
+        start_time = time.time()
+        response = ollama.generate(request.model, request.prompt)
+        end_time = time.time()
+        
+        # Get GPU state after generation
+        post_gpu_state = os.popen('nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits').read().strip()
+        
+        # Check if Ollama process appears in GPU processes
+        ollama_pre_gpu = [p for p in pre_gpu_state.split('\n') if 'ollama' in p.lower()] if pre_gpu_state else []
+        ollama_post_gpu = [p for p in post_gpu_state.split('\n') if 'ollama' in p.lower()] if post_gpu_state else []
+        
+        return {
+            "generation_time": end_time - start_time,
+            "generated_text": response.get("response", ""),
+            "gpu_usage": {
+                "pre_generation": ollama_pre_gpu,
+                "post_generation": ollama_post_gpu,
+                "using_gpu": len(ollama_post_gpu) > 0
+            }
+        }
+    except Exception as e:
+        print('Error:', str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to test GPU usage: {str(e)}")
