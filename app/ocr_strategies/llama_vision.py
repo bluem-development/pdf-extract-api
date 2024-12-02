@@ -30,11 +30,16 @@ class LlamaVisionOCRStrategy(OCRStrategy):
 
             # Generate text using the Llama 3.2 Vision model
             try:
-                response = ollama.chat("llama3.2-vision", [{
-                    'role': 'user',
-                    'content':  os.getenv('LLAMA_VISION_PROMPT', "You are OCR. Convert image to markdown."),
-                    'images': [temp_filename]
-                }], stream=True)
+                response = ollama.chat(
+                    "llama3.2-vision",
+                    [{
+                        'role': 'user',
+                        'content': os.getenv('LLAMA_VISION_PROMPT', "You are OCR. Convert image to markdown."),
+                        'images': [temp_filename]
+                    }],
+                    stream=True,
+                    options={"num_gpu": 1}  # Enable GPU usage
+                )
                 os.remove(temp_filename)
                 num_chunk = 1
                 for chunk in response:
